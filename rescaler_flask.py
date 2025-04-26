@@ -139,9 +139,6 @@ def manual_rescale():
         if 'conn' in locals(): conn.close()
 
 
-# --- MAIN ---
-if __name__ == '__main__':
-    # Start background thread
-    threading.Thread(target=background_loop, daemon=True).start()
-    # Start Flask app
-    app.run(host='0.0.0.0', port=5000)
+
+# Start background loop even when deployed via Gunicorn
+threading.Thread(target=background_loop, daemon=True).start()
