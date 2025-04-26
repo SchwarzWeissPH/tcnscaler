@@ -3,6 +3,8 @@ from flask import Flask, jsonify
 import numpy as np
 import pymysql
 import pickle
+import threading
+import time
 from sklearn.preprocessing import StandardScaler
 from datetime import datetime
 
@@ -28,12 +30,12 @@ def load_scaler():
     with open(SCALER_PATH, 'rb') as f:
         return pickle.load(f)
 
-@app.route('/rescaled', methods=['GET'])
-def rescale_latest_prediction():
+def fetch_and_rescale_and_save():
     try:
         conn = connect_to_database()
         if not conn:
-            return jsonify({'error': 'DB connection failed'}), 500
+            print("[ERROR] DB connection failed.")
+            return
         cursor = conn.cursor()
 
         # Fetch the latest scaled prediction
@@ -46,7 +48,8 @@ def rescale_latest_prediction():
         row = cursor.fetchone()
 
         if not row:
-            return jsonify({'error': 'No predictions found'}), 404
+            print("[ERROR] No predictions found.")
+            return
 
         # Rescale
         scaler: StandardScaler = load_scaler()
@@ -65,15 +68,55 @@ def rescale_latest_prediction():
             temperature,
             humidity,
             pressure,
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Server local time
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         ))
         conn.commit()
+        print(f"[INFO] Saved new prediction: {temperature}°C, {humidity}%, {pressure}hPa")
+
+    except Exception as e:
+        print(f"[ERROR] Background job error: {e}")
+
+    finally:
+        if 'cursor' in locals(): cursor.close()
+        if 'conn' in locals(): conn.close()
+
+def background_loop():
+    while True:
+        fetch_and_rescale_and_save()
+        time.sleep(60)  # wait 60 seconds before running again
+
+@app.route('/rescaled', methods=['GET'])
+def manual_rescale():
+    try:
+        conn = connect_to_database()
+        if not conn:
+            return jsonify({'error': 'DB connection failed'}), 500
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT predicted_value_1, predicted_value_2, predicted_value_3
+            FROM signup_predictions
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+
+        if not row:
+            return jsonify({'error': 'No predictions found'}), 404
+
+        scaler: StandardScaler = load_scaler()
+        scaled = np.array([[float(row[0]), float(row[1]), float(row[2])]])
+        rescaled = scaler.inverse_transform(scaled)[0]
+
+        temperature = round(float(rescaled[0]), 2)
+        humidity = round(float(rescaled[1]), 2)
+        pressure = round(float(rescaled[2]), 2)
 
         return jsonify({
             'temperature': temperature,
             'humidity': humidity,
             'pressure': pressure,
-            'message': 'Prediction rescaled and saved successfully'
+            'message': 'Manual rescale successful'
         })
 
     except Exception as e:
@@ -85,4 +128,7 @@ def rescale_latest_prediction():
 
 # --- MAIN ---
 if __name__ == '__main__':
+    # Start background thread
+    threading.Thread(target=background_loop, daemon=True).start()
+    # Start Flask app
     app.run(host='0.0.0.0', port=5000)
