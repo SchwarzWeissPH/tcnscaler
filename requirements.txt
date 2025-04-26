@@ -4,3 +4,4 @@ keras
 tensorflow
 keras-tcn
 scikit-learn
+gunicorn
