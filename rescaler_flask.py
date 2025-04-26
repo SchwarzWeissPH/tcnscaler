@@ -112,11 +112,23 @@ def manual_rescale():
         humidity = round(float(rescaled[1]), 2)
         pressure = round(float(rescaled[2]), 2)
 
+        # --- ADD: Save to database manually too ---
+        cursor.execute("""
+            INSERT INTO prediction (tcn_temperature, tcn_humidity, tcn_pressure, timestamp)
+            VALUES (%s, %s, %s, %s)
+        """, (
+            temperature,
+            humidity,
+            pressure,
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        ))
+        conn.commit()
+
         return jsonify({
             'temperature': temperature,
             'humidity': humidity,
             'pressure': pressure,
-            'message': 'Manual rescale successful'
+            'message': 'Manual rescale successful and saved to database'
         })
 
     except Exception as e:
@@ -125,6 +137,7 @@ def manual_rescale():
     finally:
         if 'cursor' in locals(): cursor.close()
         if 'conn' in locals(): conn.close()
+
 
 # --- MAIN ---
 if __name__ == '__main__':
