@@ -3,15 +3,12 @@ from flask import Flask, jsonify
 import numpy as np
 import pymysql
 import pickle
-from keras.models import load_model
-from keras.utils import custom_object_scope
-from tcn import TCN
+from sklearn.preprocessing import StandardScaler
 from datetime import datetime
 
 app = Flask(__name__)
 
-MODEL_PATH = 'tcnflask.keras'
-SCALER_PATH = 'tcnflask.pkl'  # Now expecting .pkl file
+SCALER_PATH = 'tcnflask.pkl'
 
 DB_CONFIG = {
     'host': '118.139.162.228',
@@ -22,10 +19,9 @@ DB_CONFIG = {
 
 def connect_to_database():
     try:
-        conn = pymysql.connect(**DB_CONFIG, connect_timeout=60, read_timeout=60)
-        return conn
+        return pymysql.connect(**DB_CONFIG, connect_timeout=60, read_timeout=60)
     except Exception as e:
-        print(f"[ERROR] Database connection failed: {e}")
+        print(f"[ERROR] DB connection failed: {e}")
         return None
 
 def load_scaler():
@@ -51,14 +47,14 @@ def rescale_latest_prediction():
         if not row:
             return jsonify({'error': 'No predictions found'}), 404
 
-        scaler = load_scaler()
-        scaled = np.array(row).reshape(1, -1)
+        scaler: StandardScaler = load_scaler()
+        scaled = np.array([[float(row[0]), float(row[1]), float(row[2])]])
         rescaled = scaler.inverse_transform(scaled)[0]
 
         return jsonify({
-            'temperature': float(rescaled[0]),
-            'humidity': float(rescaled[1]),
-            'pressure': float(rescaled[2])
+            'temperature': round(float(rescaled[0]), 2),
+            'humidity': round(float(rescaled[1]), 2),
+            'pressure': round(float(rescaled[2]), 2)
         })
 
     except Exception as e:
