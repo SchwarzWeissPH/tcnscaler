@@ -5,6 +5,7 @@ import pymysql
 import pickle
 import threading
 import time
+import pytz  # <-- ADD THIS
 from sklearn.preprocessing import StandardScaler
 from datetime import datetime
 
@@ -19,6 +20,9 @@ DB_CONFIG = {
     'database': 'signup'
 }
 
+# New: Manila timezone
+manila_tz = pytz.timezone('Asia/Manila')
+
 def connect_to_database():
     try:
         return pymysql.connect(**DB_CONFIG, connect_timeout=60, read_timeout=60)
@@ -30,6 +34,9 @@ def load_scaler():
     with open(SCALER_PATH, 'rb') as f:
         return pickle.load(f)
 
+def get_current_time_manila():
+    return datetime.now(manila_tz).strftime('%Y-%m-%d %H:%M:%S')
+
 def fetch_and_rescale_and_save():
     try:
         conn = connect_to_database()
@@ -38,7 +45,6 @@ def fetch_and_rescale_and_save():
             return
         cursor = conn.cursor()
 
-        # Fetch the latest scaled prediction
         cursor.execute("""
             SELECT predicted_value_1, predicted_value_2, predicted_value_3
             FROM signup_predictions
@@ -51,7 +57,6 @@ def fetch_and_rescale_and_save():
             print("[ERROR] No predictions found.")
             return
 
-        # Rescale
         scaler: StandardScaler = load_scaler()
         scaled = np.array([[float(row[0]), float(row[1]), float(row[2])]])
         rescaled = scaler.inverse_transform(scaled)[0]
@@ -60,7 +65,6 @@ def fetch_and_rescale_and_save():
         humidity = round(float(rescaled[1]), 2)
         pressure = round(float(rescaled[2]), 2)
 
-        # Save to prediction table
         cursor.execute("""
             INSERT INTO prediction (tcn_temperature, tcn_humidity, tcn_pressure, timestamp)
             VALUES (%s, %s, %s, %s)
@@ -68,10 +72,10 @@ def fetch_and_rescale_and_save():
             temperature,
             humidity,
             pressure,
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            get_current_time_manila()
         ))
         conn.commit()
-        print(f"[INFO] Saved new prediction: {temperature}°C, {humidity}%, {pressure}hPa")
+        print(f"[INFO] Saved new prediction: {temperature}°C, {humidity}%, {pressure}hPa at {get_current_time_manila()}")
 
     except Exception as e:
         print(f"[ERROR] Background job error: {e}")
@@ -83,7 +87,7 @@ def fetch_and_rescale_and_save():
 def background_loop():
     while True:
         fetch_and_rescale_and_save()
-        time.sleep(60)  # wait 60 seconds before running again
+        time.sleep(60)  # wait 60 seconds
 
 @app.route('/rescaled', methods=['GET'])
 def manual_rescale():
@@ -112,7 +116,6 @@ def manual_rescale():
         humidity = round(float(rescaled[1]), 2)
         pressure = round(float(rescaled[2]), 2)
 
-        # --- ADD: Save to database manually too ---
         cursor.execute("""
             INSERT INTO prediction (tcn_temperature, tcn_humidity, tcn_pressure, timestamp)
             VALUES (%s, %s, %s, %s)
@@ -120,7 +123,7 @@ def manual_rescale():
             temperature,
             humidity,
             pressure,
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            get_current_time_manila()
         ))
         conn.commit()
 
@@ -128,6 +131,7 @@ def manual_rescale():
             'temperature': temperature,
             'humidity': humidity,
             'pressure': pressure,
+            'timestamp': get_current_time_manila(),
             'message': 'Manual rescale successful and saved to database'
         })
 
@@ -137,8 +141,6 @@ def manual_rescale():
     finally:
         if 'cursor' in locals(): cursor.close()
         if 'conn' in locals(): conn.close()
-
-
 
 # Start background loop even when deployed via Gunicorn
 threading.Thread(target=background_loop, daemon=True).start()
