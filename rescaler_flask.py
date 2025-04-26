@@ -8,7 +8,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-SCALER_PATH = 'tcnflask.pkl'  # Make sure this is a StandardScaler, not just a numpy array
+SCALER_PATH = 'weather_scaler_standard.pkl'  # Make sure this is a StandardScaler, not just a numpy array
 
 DB_CONFIG = {
     'host': '118.139.162.228',
