@@ -2,7 +2,7 @@
 from flask import Flask, jsonify
 import numpy as np
 import pymysql
-import pickle, gzip
+import pickle
 from keras.models import load_model
 from keras.utils import custom_object_scope
 from tcn import TCN
@@ -10,8 +10,8 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-MODEL_PATH = 'tcnflask.keras'
-SCALER_PATH = 'tcnflask.pkl'  # Add this if you're rescaling
+MODEL_PATH = 'weather_model_filtered.keras'
+SCALER_PATH = 'weather_scaler_filtered.pkl'  # Now expecting .pkl file
 
 DB_CONFIG = {
     'host': '118.139.162.228',
@@ -29,7 +29,7 @@ def connect_to_database():
         return None
 
 def load_scaler():
-    with gzip.open(SCALER_PATH, 'rb') as f:
+    with open(SCALER_PATH, 'rb') as f:
         return pickle.load(f)
 
 @app.route('/rescaled', methods=['GET'])
