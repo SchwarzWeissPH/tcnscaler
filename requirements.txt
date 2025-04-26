@@ -1,0 +1,6 @@
+Flask
+pymysql
+keras
+tensorflow
+keras-tcn
+scikit-learn
