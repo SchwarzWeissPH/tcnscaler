@@ -8,7 +8,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-SCALER_PATH = 'tcnflask.pkl'
+SCALER_PATH = 'tcnflask.pkl'  # Make sure this is a StandardScaler, not just a numpy array
 
 DB_CONFIG = {
     'host': '118.139.162.228',
@@ -25,8 +25,14 @@ def connect_to_database():
         return None
 
 def load_scaler():
-    with open(SCALER_PATH, 'rb') as f:
-        return pickle.load(f)
+    try:
+        with open(SCALER_PATH, 'rb') as f:
+            scaler = pickle.load(f)
+            if not hasattr(scaler, 'inverse_transform'):
+                raise TypeError("Loaded object is not a valid scaler with 'inverse_transform'")
+            return scaler
+    except Exception as e:
+        raise RuntimeError(f"Failed to load scaler: {e}")
 
 @app.route('/rescaled', methods=['GET'])
 def rescale_latest_prediction():
@@ -47,7 +53,7 @@ def rescale_latest_prediction():
         if not row:
             return jsonify({'error': 'No predictions found'}), 404
 
-        scaler: StandardScaler = load_scaler()
+        scaler = load_scaler()
         scaled = np.array([[float(row[0]), float(row[1]), float(row[2])]])
         rescaled = scaler.inverse_transform(scaled)[0]
 
