@@ -8,7 +8,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-SCALER_PATH = 'weather_scaler_standard.pkl'  # Make sure this is a StandardScaler, not just a numpy array
+SCALER_PATH = 'weather_scaler_standard.pkl'
 
 DB_CONFIG = {
     'host': '118.139.162.228',
@@ -25,14 +25,8 @@ def connect_to_database():
         return None
 
 def load_scaler():
-    try:
-        with open(SCALER_PATH, 'rb') as f:
-            scaler = pickle.load(f)
-            if not hasattr(scaler, 'inverse_transform'):
-                raise TypeError("Loaded object is not a valid scaler with 'inverse_transform'")
-            return scaler
-    except Exception as e:
-        raise RuntimeError(f"Failed to load scaler: {e}")
+    with open(SCALER_PATH, 'rb') as f:
+        return pickle.load(f)
 
 @app.route('/rescaled', methods=['GET'])
 def rescale_latest_prediction():
@@ -42,6 +36,7 @@ def rescale_latest_prediction():
             return jsonify({'error': 'DB connection failed'}), 500
         cursor = conn.cursor()
 
+        # Fetch the latest scaled prediction
         cursor.execute("""
             SELECT predicted_value_1, predicted_value_2, predicted_value_3
             FROM signup_predictions
@@ -53,14 +48,32 @@ def rescale_latest_prediction():
         if not row:
             return jsonify({'error': 'No predictions found'}), 404
 
-        scaler = load_scaler()
+        # Rescale
+        scaler: StandardScaler = load_scaler()
         scaled = np.array([[float(row[0]), float(row[1]), float(row[2])]])
         rescaled = scaler.inverse_transform(scaled)[0]
 
+        temperature = round(float(rescaled[0]), 2)
+        humidity = round(float(rescaled[1]), 2)
+        pressure = round(float(rescaled[2]), 2)
+
+        # Save to prediction table
+        cursor.execute("""
+            INSERT INTO prediction (tcn_temperature, tcn_humidity, tcn_pressure, timestamp)
+            VALUES (%s, %s, %s, %s)
+        """, (
+            temperature,
+            humidity,
+            pressure,
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Server local time
+        ))
+        conn.commit()
+
         return jsonify({
-            'temperature': round(float(rescaled[0]), 2),
-            'humidity': round(float(rescaled[1]), 2),
-            'pressure': round(float(rescaled[2]), 2)
+            'temperature': temperature,
+            'humidity': humidity,
+            'pressure': pressure,
+            'message': 'Prediction rescaled and saved successfully'
         })
 
     except Exception as e:
