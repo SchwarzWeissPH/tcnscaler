@@ -10,8 +10,8 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-MODEL_PATH = 'weather_model_filtered.keras'
-SCALER_PATH = 'weather_scaler_filtered.pkl'  # Now expecting .pkl file
+MODEL_PATH = 'tcnflask.keras'
+SCALER_PATH = 'tcnflask.pkl'  # Now expecting .pkl file
 
 DB_CONFIG = {
     'host': '118.139.162.228',
