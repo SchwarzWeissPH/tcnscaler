@@ -45,7 +45,7 @@ def fetch_and_rescale_and_save():
             return
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(""" 
             SELECT predicted_value_1, predicted_value_2, predicted_value_3
             FROM signup_predictions
             ORDER BY timestamp DESC
@@ -87,7 +87,7 @@ def fetch_and_rescale_and_save():
 def background_loop():
     while True:
         fetch_and_rescale_and_save()
-        time.sleep(60)  # wait 60 seconds
+        time.sleep(300)  # wait 300 seconds (5 minutes)
 
 @app.route('/rescaled', methods=['GET'])
 def manual_rescale():
